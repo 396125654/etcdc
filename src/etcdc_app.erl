@@ -13,6 +13,7 @@
 %% ----------------------------------------------------------------------------
 
 start(_, _) ->
+	{ok, _} = application:ensure_all_started(lhttpc),
     etcdc_sup:start_link().
 
 prep_stop(State) ->

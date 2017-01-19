@@ -1,0 +1,10 @@
+[
+ {deps, [
+    {jsx, ".*", {git, "git://github.com/talentdeficit/jsx.git"}},
+    {lhttpc, ".*", {git, "https://github.com/esl/lhttpc.git"}}
+ ]},
+ {ct_dir, "test"},
+ {ct_log_dir, "test/logs"},
+ {cover_enabled, true},
+ {erl_opts, [debug_info]}
+].

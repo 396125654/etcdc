@@ -3,13 +3,18 @@
   {vsn, "0.2.3"},
   {registered, []},
   {applications, [kernel,
-                  stdlib,
-                  lhttpc,
-                  lejson
+                  stdlib
                  ]},
   {modules, []},
   {mod, {etcdc_app, no_arg}},
-  {env, [{etcd_host, "127.0.0.1"},
-         {etcd_client_port, 4001},
-         {etcd_admin_port, 7001}]}
+  {env, [{etcd_server_list,
+          [{"127.0.0.1", 49179},
+           {"127.0.0.1", 49279},
+           {"127.0.0.1", 49379},
+           {"127.0.0.1", 49479}]
+         },
+         {client_retry_times, 3},
+         {ejabberd_workernode_prefix, "/imstest/ejabberd/workernode"},
+         {ejabberd_connnode_prefix, "/imstest/ejabberd/connnode"},
+         {ejabberd_mucnode_prefix, "/imstest/ejabberd/mucnode"}]}
  ]}.

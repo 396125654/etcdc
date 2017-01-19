@@ -1,6 +1,6 @@
 -module(etcdc_lib).
 
--export([call/4, call/5, ensure_first_slash/1, parse_response/1]).
+-export([call/3, call/4, ensure_first_slash/1, parse_response/1]).
 
 -export([url_encode/1, url_decode/1]).
 
@@ -8,11 +8,15 @@
 
 %% ----------------------------------------------------------------------------
 
-call(Method, PortType, Path, Opts) ->
-    call(Method, PortType, Path, Opts, <<>>).
+call(Method, Path, Opts) ->
+    call(Method, Path, Opts, <<>>).
 
-call(Method, PortType, Path, Opts, Value) ->
-    {Host, Port} = get_server_info(PortType),
+call(Method, Path, Opts, Value) ->
+    RetryTime = get_etcdc_call_retrytimes(),
+    call_do(Method, Path, Opts, Value, RetryTime, []).
+
+call_do(Method, Path, Opts, Value, RetryTime, Exclude) ->
+    {Host, Port} = get_server_info(Exclude),
     Timeout = get_timeout(Opts),
     Url = url(Host, Port, Path, proplists:unfold(Opts)),
     case lhttpc:request(Url, Method, [], Value, Timeout) of
@@ -23,26 +27,43 @@ call(Method, PortType, Path, Opts, Value) ->
         {ok, {{_, _}, _, Body}} ->
             {error, parse_response(Body)};
         {error, Error} ->
-            {error, Error}
+            case retry_call(RetryTime) of
+                true ->
+                    call_do(Method, Path, Opts, Value,
+                            RetryTime - 1, [{Host, Port} | Exclude]);
+                false ->
+                    {error, Error}
+            end
     end.
 
 ensure_first_slash([$/|_] = Path) -> Path;
 ensure_first_slash(Path) -> [$/|Path].
 
 parse_response(Body) ->
-    case lejson:decode(Body) of
-        {error, not_json} ->
-            Body;
-        Json ->
-            simplify_json(Json)
-    end.
+    jsx:decode(Body, [return_maps]).
 
 %% ----------------------------------------------------------------------------
 
-get_server_info(PortType) ->
-    {ok, Host} = application:get_env(etcdc, etcd_host),
-    {ok, Port} = application:get_env(etcdc, PortType),
-    {Host, Port}.
+get_etcdc_call_retrytimes() ->
+    application:get_env(etcdc, client_retry_times, 1).
+
+retry_call(RetryTime) when RetryTime > 1 ->
+    true;
+retry_call(_) ->
+    false.
+
+get_server_info(Exclude) ->
+    {ok, ServerList0} = application:get_env(etcdc, etcd_server_list),
+    ServerList =
+        case erlang:length(ServerList0) =< erlang:length(Exclude) of
+            true ->
+                ServerList0;
+            false ->
+                ServerList0 -- Exclude
+        end,
+    {A1, A2, A3} = os:timestamp(),
+    random:seed(A1, A2, A3),
+    lists:nth(random:uniform(length(ServerList)), ServerList).
 
 get_timeout(Opts) ->
     case proplists:get_bool(wait, Opts) of
@@ -70,14 +91,6 @@ to_str(T) when is_integer(T) -> url_encode(integer_to_list(T));
 to_str(T) when is_float(T) -> url_encode(float_to_list(T));
 to_str(T) when is_binary(T) -> url_encode(binary_to_list(T));
 to_str(T) -> url_encode(T).
-
-simplify_json(Map) when is_map(Map) ->
-    Ls = maps:to_list(Map),
-    maps:from_list([ {to_underscore(K), simplify_json(V)} || {K, V} <- Ls ]);
-simplify_json(List) when is_list(List) ->
-    [ simplify_json(E) || E <- List ];
-simplify_json(Value) ->
-    Value.
 
 to_underscore(Word) when is_binary(Word) ->
     to_underscore(binary_to_list(Word));
