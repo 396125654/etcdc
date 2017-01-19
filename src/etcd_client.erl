@@ -18,6 +18,10 @@
         , register_workernode/3
         , register_workernode/4
         , get_workernode/1
+        , watch_storenode_list/1
+        , register_storenode/3
+        , register_storenode/4
+        , get_storenode/1
         ]).
 
 %% gen_server callbacks
@@ -44,32 +48,35 @@ stop() ->
 
 -spec watch_workernode_list(integer()) -> ok.
 watch_workernode_list(TimeInterval) ->
-    EtcdKey = get_node_prefix(worker),
-    erlang:send(?SERVER, {watch_workernode_list, EtcdKey, TimeInterval}),
-    ok.
+    watch_node_list(worker, TimeInterval).
 
 -spec register_workernode(atom(), integer(), integer()) -> ok.
-register_workernode(Type, TTL, TimeInterval) ->
-    register_workernode(Type, TTL, TimeInterval, node()).
+register_workernode(GroupType, TTL, TimeInterval) ->
+    register_node(worker, GroupType, TTL, TimeInterval, node()).
 
 -spec register_workernode(atom(), integer(), integer(), node()) -> ok.
-register_workernode(Type, TTL, TimeInterval, Node) ->
-    erlang:send(?SERVER, {register_workernode, Type, TTL, TimeInterval, Node}),
-    ok.
+register_workernode(GroupType, TTL, TimeInterval, Node) ->
+    register_node(worker, GroupType, TTL, TimeInterval, Node).
 
 -spec get_workernode(atom()) -> {error, term()} | {ok, node()}.
-get_workernode(Type) ->
-    EtcdKey = filename:join([get_node_prefix(worker), erlang:atom_to_list(Type)]),
-    case catch ets:lookup(?SERVER, EtcdKey) of
-        {'EXIT', _} ->
-            {error, etcdc_cache_error};
-        [] ->
-            {error, empty};
-        [{_, List}] ->
-            {A1, A2, A3} = os:timestamp(),
-            random:seed(A1, A2, A3),
-            {ok, lists:nth(random:uniform(length(List)), List)}
-    end.
+get_workernode(GroupType) ->
+    get_node(worker, GroupType).
+
+-spec watch_storenode_list(integer()) -> ok.
+watch_storenode_list(TimeInterval) ->
+    watch_node_list(store, TimeInterval).
+
+-spec register_storenode(atom(), integer(), integer()) -> ok.
+register_storenode(GroupType, TTL, TimeInterval) ->
+    register_node(store, GroupType, TTL, TimeInterval, node()).
+
+-spec register_storenode(atom(), integer(), integer(), node()) -> ok.
+register_storenode(GroupType, TTL, TimeInterval, Node) ->
+    register_node(store, GroupType, TTL, TimeInterval, Node).
+
+-spec get_storenode(atom()) -> {error, term()} | {ok, node()}.
+get_storenode(GroupType) ->
+    get_node(store, GroupType).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -91,14 +98,16 @@ handle_cast(_Msg, State) ->
     {noreply, State, ?HIBERNATE_TIMEOUT}.
 
 %%--------------------------------------------------------------------
-handle_info({register_workernode, Type, TTL, TimeInterval, Node}, State) ->
-    EtcdKey = generate_node_key(worker, Type, Node),
+handle_info({register_node, NodeType, GroupType, TTL, TimeInterval, Node},
+            State) ->
+    EtcdKey = generate_node_key(NodeType, GroupType, Node),
     write_node(EtcdKey, TTL),
     erlang:send_after(TimeInterval, self(),
-                      {register_workernode, Type, TTL, TimeInterval, Node}),
+                      {register_node, NodeType, GroupType, TTL,
+                       TimeInterval, Node}),
     {noreply, State, ?HIBERNATE_TIMEOUT};
 
-handle_info({watch_workernode_list, EtcdKey, TimeInterval}, State) ->
+handle_info({watch_node_list, EtcdKey, TimeInterval}, State) ->
     case catch get_node_list(EtcdKey) of
         {'EXIT', _EXIT} ->
             ignore;
@@ -106,7 +115,7 @@ handle_info({watch_workernode_list, EtcdKey, TimeInterval}, State) ->
             catch update_node_list_into_ets(Value)
     end,
     erlang:send_after(TimeInterval, self(),
-                      {watch_workernode_list, EtcdKey, TimeInterval}),
+                      {watch_node_list, EtcdKey, TimeInterval}),
     {noreply, State, ?HIBERNATE_TIMEOUT};
 
 handle_info(_Info, State) ->
@@ -124,9 +133,36 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
-generate_node_key(NodeType, Type, Node) ->
+-spec watch_node_list(atom(), integer()) -> ok.
+watch_node_list(NodeType, TimeInterval) ->
+    EtcdKey = get_node_prefix(NodeType),
+    erlang:send(?SERVER, {watch_node_list, EtcdKey, TimeInterval}),
+    ok.
+
+-spec register_node(atom(), atom(), integer(), integer(), node()) -> ok.
+register_node(NodeType, GroupType, TTL, TimeInterval, Node) ->
+    erlang:send(?SERVER, {register_node, NodeType, GroupType,
+                          TTL, TimeInterval, Node}),
+    ok.
+
+-spec get_node(atom(), atom()) -> {error, term()} | {ok, node()}.
+get_node(NodeType, GroupType) ->
+    EtcdKey = filename:join([get_node_prefix(NodeType),
+                             erlang:atom_to_list(GroupType)]),
+    case catch ets:lookup(?SERVER, EtcdKey) of
+        {'EXIT', _} ->
+            {error, etcdc_cache_error};
+        [] ->
+            {error, empty};
+        [{_, List}] ->
+            {A1, A2, A3} = os:timestamp(),
+            random:seed(A1, A2, A3),
+            {ok, lists:nth(random:uniform(length(List)), List)}
+    end.
+
+generate_node_key(NodeType, GroupType, Node) ->
     KeyPrefix = get_node_prefix(NodeType),
-    filename:join([KeyPrefix, erlang:atom_to_list(Type),
+    filename:join([KeyPrefix, erlang:atom_to_list(GroupType),
                    http_uri:encode(erlang:atom_to_list(Node))]).
 
 write_node(EtcdKey, TTL) ->
@@ -152,7 +188,7 @@ get_node_prefix(worker) ->
     application:get_env(etcdc, ejabberd_workernode_prefix, "");
 get_node_prefix(conn) ->
     application:get_env(etcdc, ejabberd_connnode_prefix, "");
-get_node_prefix(muc) ->
-    application:get_env(etcdc, ejabberd_mucnode_prefix, "");
+get_node_prefix(store) ->
+    application:get_env(etcdc, ejabberd_storenode_prefix, "");
 get_node_prefix(_) ->
     "".

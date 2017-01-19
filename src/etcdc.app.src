@@ -16,5 +16,5 @@
          {client_retry_times, 3},
          {ejabberd_workernode_prefix, "/imstest/ejabberd/workernode"},
          {ejabberd_connnode_prefix, "/imstest/ejabberd/connnode"},
-         {ejabberd_mucnode_prefix, "/imstest/ejabberd/mucnode"}]}
+         {ejabberd_storenode_prefix, "/imstest/ejabberd/storenode"}]}
  ]}.
