@@ -45,17 +45,10 @@ set(Path, Value, Opts) when is_binary(Path) ->
     set(binary_to_list(Path), Value, Opts);
 set(Path, Value, Opts) ->
     FullPath = "/v2/keys" ++ etcdc_lib:ensure_first_slash(Path),
-    {FullOpts, Renew, TTL} = check_for_ttl([{value, Value} | Opts]),
+    FullOpts = [{value, Value} | Opts],
     IsSequence = proplists:get_bool(sequence, FullOpts),
     Method = case IsSequence of true -> post; false -> put end,
-    Res = etcdc_lib:call(Method, FullPath, FullOpts),
-    case Renew of
-        true ->
-            etcdc_ttl:new(Path, TTL),
-            Res;
-        false ->
-            Res
-    end.
+    etcdc_lib:call(Method, FullPath, FullOpts).
 
 -spec del(string()) -> {ok, #{}} | {error, #{}}.
 del(Path) ->
@@ -65,13 +58,3 @@ del(Path) ->
 del(Path, Opts) ->
     NewPath = "/v2/keys" ++ etcdc_lib:ensure_first_slash(Path),
     etcdc_lib:call(delete, NewPath, Opts).
-
-%% Internal -------------------------------------------------------------------
-
-check_for_ttl(Opts) ->
-    case lists:keyfind(ttl_renew, 1, Opts) of
-        {ttl_renew, TTL} ->
-            {lists:keyreplace(ttl_renew, 1, Opts, {ttl, TTL}), true, TTL};
-        false ->
-            {Opts, false, infinity}
-    end.

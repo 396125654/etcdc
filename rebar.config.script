@@ -6,5 +6,7 @@
  {ct_dir, "test"},
  {ct_log_dir, "test/logs"},
  {cover_enabled, true},
- {erl_opts, [debug_info]}
+ {erl_opts, [debug_info]},
+ {xref_checks, [undefined_function_calls, undefined_functions,
+               locals_not_used, deprecated_function_calls, deprecated_functions]}
 ].

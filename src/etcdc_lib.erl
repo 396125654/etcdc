@@ -92,21 +92,6 @@ to_str(T) when is_float(T) -> url_encode(float_to_list(T));
 to_str(T) when is_binary(T) -> url_encode(binary_to_list(T));
 to_str(T) -> url_encode(T).
 
-to_underscore(Word) when is_binary(Word) ->
-    to_underscore(binary_to_list(Word));
-to_underscore(Word) ->
-    list_to_atom(string:join(to_underscore(Word, [], []), "_")).
-
-to_underscore([C,D|Word], Stack, Res) when C >= $A, C =< $Z, D >= $a, D =< $z ->
-    to_underscore([D|Word], [C], [lists:reverse(Stack)|Res]);
-to_underscore([C,D|Word], Stack, Res) when C >= $a, C =< $z, D >= $A, D =< $Z ->
-    to_underscore([D|Word], [], [lists:reverse([C|Stack])|Res]);
-to_underscore([C|Word], Stack, Res) ->
-    to_underscore(Word, [C|Stack], Res);
-to_underscore([], Stack, Res) ->
-    [ string:to_lower(P) || P <- lists:reverse([lists:reverse(Stack)|Res]),
-                            length(P) > 0 ].
-
 %% Url encode/decode ----------------------------------------------------------
 
 url_encode(Value) ->

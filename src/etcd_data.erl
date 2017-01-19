@@ -20,7 +20,7 @@ decode_key(K)when is_binary(K)->
     try
         jsx:decode(K)
     catch _:_ ->
-              binary_to_atom(K, latin1)
+        binary_to_atom(K, latin1)
     end.
 
 decode_value(V)->
