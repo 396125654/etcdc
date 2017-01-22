@@ -6,25 +6,18 @@
 
 -compile(export_all).
 
--import(t_ct_utils, [ set_opt/3
-                    , unique_user/1
-                    , set_opt/2
-                    , make_full_jib/3
-                    , sender_send_msg_done/0
-                    , receiver_receive_msg_done/0
-                    , generate_one_user_login/1
-                    ]).
-
 %%--------------------------------------------------------------------
-suite() -> [{timetrap, {seconds, 10}}].
+suite() -> [{timetrap, {seconds, 30}}].
 
 %%--------------------------------------------------------------------
 groups() ->
-    [ {etcdc,
+    [ {etcdc, [sequence],
        [ test_whole_flow_workernode
        , test_whole_flow_storenode
        , test_whole_flow_node
        , test_etcd_watch
+       , test_get_machineid_clean_history
+       , test_get_machineid
        ]}
     ].
 %%--------------------------------------------------------------------
@@ -35,6 +28,7 @@ all() ->
 init_per_suite(Config) ->
     {ok, _} = etcdc:start(),
     ok = prepare_env(),
+    etcdc:del("/imstest", [recursive]),
     Config.
 
 %%--------------------------------------------------------------------
@@ -67,6 +61,10 @@ prepare_env() ->
     application:set_env(etcdc, ejabberd_workernode_prefix, "/imstest/ejabberd/workernode"),
     application:set_env(etcdc, ejabberd_connnode_prefix, "/imstest/ejabberd/connnode"),
     application:set_env(etcdc, ejabberd_storenode_prefix, "/imstest/ejabberd/storenode"),
+    application:set_env(etcdc, global_machine_id_key, "/imstest/ejabberd/globalmachineid"),
+    application:set_env(etcdc, global_machine_id_start, 1),
+    application:set_env(etcdc, ejabberd_machine_id_prefix, "/imstest/ejabberd/machinetoid"),
+    application:set_env(etcdc, ejabberd_id_machine_prefix, "/imstest/ejabberd/idtomachine"),
     ok.
 
 wait_for_ets_table_ready(Len) ->
@@ -191,4 +189,33 @@ test_etcd_watch(_Config) ->
     wait_for_etcd_watch_event(),
     wait_for_etcd_watch_event(),
 
+    ok.
+
+test_get_machineid(_Config) ->
+    test_get_machineid_do().
+
+test_get_machineid_clean_history(_Config) ->
+    etcdc:del("/imstest", [recursive]),
+    test_get_machineid_do().
+
+test_get_machineid_do() ->
+    T = ets:new(t, [public]),
+    RefList =
+        [task:async(fun() -> Node = list_to_atom("node" ++ integer_to_list(X)),
+                             ID = etcd_client:get_machineid(Node),
+                             ets:insert(T, {Node, ID}),
+                             ets:insert(T, {ID, Node}),
+                             ok
+                    end)
+        || X <- lists:seq(1, 20)],
+    [ok = task:await(X) || X <- RefList],
+    SlefNode = node(),
+    SlefID = etcd_client:get_machineid(),
+    ets:insert(T, {SlefNode, SlefID}),
+    ets:insert(T, {SlefID, SlefNode}),
+    EtsList = ets:tab2list(T),
+    [1 = erlang:length(proplists:get_all_values(ID, EtsList))
+     || {ID, _Node} <- EtsList],
+    [true = (ID == proplists:get_value(Node, EtsList))
+     || {ID, Node} <- EtsList, erlang:is_integer(ID) == true],
     ok.

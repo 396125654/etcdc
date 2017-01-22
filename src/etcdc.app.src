@@ -14,6 +14,10 @@
            {"127.0.0.1", 49479}]
          },
          {client_retry_times, 3},
+         {global_machine_id_key, "/imstest/ejabberd/globalmachineid"},
+         {global_machine_id_start, 1},
+         {ejabberd_machine_id_prefix, "/imstest/ejabberd/machinetoid"},
+         {ejabberd_id_machine_prefix, "/imstest/ejabberd/idtomachine"},
          {ejabberd_workernode_prefix, "/imstest/ejabberd/workernode"},
          {ejabberd_connnode_prefix, "/imstest/ejabberd/connnode"},
          {ejabberd_storenode_prefix, "/imstest/ejabberd/storenode"}]}

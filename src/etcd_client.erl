@@ -14,7 +14,9 @@
 -export([ start_link/0
         , stop/0]).
 
--export([ watch_workernode_list/1
+-export([ get_machineid/0
+        , get_machineid/1
+        , watch_workernode_list/1
         , register_workernode/3
         , register_workernode/4
         , get_workernode/1
@@ -45,6 +47,17 @@ start_link() ->
 
 stop() ->
     gen_server:call(?SERVER, stop).
+
+get_machineid() ->
+    get_machineid(node()).
+
+get_machineid(Node) ->
+    case get_machineid_self(Node) of
+        {error, not_found} ->
+            get_machineid_new(Node);
+        {ok, MachineToID} ->
+            MachineToID
+    end.
 
 -spec watch_workernode_list(integer()) -> ok.
 watch_workernode_list(TimeInterval) ->
@@ -133,6 +146,52 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
+get_machineid_self(Node) ->
+    MachineToIDKey =
+        get_machine_to_id_key(http_uri:encode(atom_to_list(Node))),
+    case etcdc:get(MachineToIDKey) of
+        {error, _} ->
+            {error, not_found};
+        #{<<"node">> := #{<<"value">> := MachineToID0}} ->
+            {ok, erlang:binary_to_integer(MachineToID0)}
+    end.
+
+write_machineid(MachineToID, Node) ->
+    MachineToIDKey =
+        get_machine_to_id_key(http_uri:encode(atom_to_list(Node))),
+    IDToMachineKey = get_id_to_machine_key(MachineToID),
+    etcdc:set(MachineToIDKey, MachineToID),
+    etcdc:set(IDToMachineKey, etcd_data:encode_value(Node)),
+    erlang:binary_to_integer(MachineToID).
+
+get_machineid_new(Node) ->
+    {ok, GlobalMachineIDKey} =
+        application:get_env(etcdc, global_machine_id_key),
+    case etcdc:get(GlobalMachineIDKey) of
+        {error, not_found} ->
+            {ok, GlobalMachineIDStart} =
+                application:get_env(etcdc, global_machine_id_start),
+            case etcdc:set(GlobalMachineIDKey, GlobalMachineIDStart,
+                           [{prevExist, false}]) of
+                {error, _} ->
+                    get_machineid_new(Node);
+                #{<<"action">> := <<"create">>,
+                  <<"node">> := #{<<"value">> := MachineID}} ->
+                    write_machineid(MachineID, Node)
+            end;
+        #{<<"node">> := #{<<"value">> := OriginMachineID0}} ->
+            OriginMachineID = erlang:binary_to_integer(OriginMachineID0),
+            NewMachineID = OriginMachineID + 1,
+            case etcdc:set(GlobalMachineIDKey, NewMachineID,
+                           [{prevValue, OriginMachineID}]) of
+                {error, _} ->
+                    get_machineid_new(Node);
+                #{<<"action">> := <<"compareAndSwap">>,
+                  <<"node">> := #{<<"value">> := NewOriginMachineID}} ->
+                    write_machineid(NewOriginMachineID, Node)
+            end
+    end.
+
 -spec watch_node_list(atom(), integer()) -> ok.
 watch_node_list(NodeType, TimeInterval) ->
     EtcdKey = get_node_prefix(NodeType),
@@ -183,6 +242,17 @@ update_node_list_into_ets(EtcdRes) ->
         ets:insert(?SERVER, {Key, Value})
      end || Node <- Nodes],
     ok.
+
+get_machine_to_id_key(Machine) ->
+    filename:join([get_machine_to_id_prefix(), Machine]).
+get_id_to_machine_key(ID) ->
+    filename:join([get_id_to_machine_prefix(), ID]).
+
+get_machine_to_id_prefix() ->
+    application:get_env(etcdc, ejabberd_machine_id_prefix, "").
+
+get_id_to_machine_prefix() ->
+    application:get_env(etcdc, ejabberd_id_machine_prefix, "").
 
 get_node_prefix(worker) ->
     application:get_env(etcdc, ejabberd_workernode_prefix, "");
