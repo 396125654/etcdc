@@ -36,8 +36,8 @@ call_do(Method, Path, Opts, Value, RetryTime, Exclude) ->
             end
     end.
 
-ensure_first_slash([$/|_] = Path) -> Path;
-ensure_first_slash(Path) -> [$/|Path].
+ensure_first_slash([$/ | _] = Path) -> Path;
+ensure_first_slash(Path) -> [$/ | Path].
 
 parse_response(Body) ->
     jsx:decode(Body, [return_maps]).
@@ -84,7 +84,7 @@ url(Host, Port, Path, Query) when is_integer(Port) ->
     end.
 
 parse_query(Qs) ->
-    string:join([ to_str(K) ++ "=" ++ to_str(V) || {K, V} <- Qs ], "&").
+    string:join([to_str(K) ++ "=" ++ to_str(V) || {K, V} <- Qs], "&").
 
 to_str(T) when is_atom(T) -> url_encode(atom_to_list(T));
 to_str(T) when is_integer(T) -> url_encode(integer_to_list(T));
@@ -97,14 +97,14 @@ to_str(T) -> url_encode(T).
 url_encode(Value) ->
     encode_chars(Value, safe_chars(), []).
 
-encode_chars([$\s|Value], Safe, Acc) ->
-    encode_chars(Value, Safe, [$+|Acc]);
-encode_chars([C|Value], Safe, Acc) ->
+encode_chars([$\s | Value], Safe, Acc) ->
+    encode_chars(Value, Safe, [$+ | Acc]);
+encode_chars([C | Value], Safe, Acc) ->
     case lists:member(C, Safe) of
         true ->
-            encode_chars(Value, Safe, [C|Acc]);
+            encode_chars(Value, Safe, [C | Acc]);
         false ->
-           encode_chars(Value, Safe, [encode_char(C)|Acc])
+           encode_chars(Value, Safe, [encode_char(C) | Acc])
     end;
 encode_chars([], _, Acc) ->
     lists:reverse(Acc).

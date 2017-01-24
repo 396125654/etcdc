@@ -26,14 +26,15 @@ new(Key, Opts) ->
 init([Key, Ctrl, Opts]) ->
     MonRef = erlang:monitor(process, Ctrl),
     gen_server:cast(self(), check_watch),
-    {ok, #{ctrl=>Ctrl, key=>Key, index=>0, mon_ref=>MonRef, opts=>Opts}}.
+    {ok, #{ctrl => Ctrl, key => Key, index => 0,
+           mon_ref => MonRef, opts => Opts}}.
 
 handle_call(_, _, State) ->
     {noreply, State}.
 
 handle_cast(check_watch, State) ->
-    #{key:=Key, ctrl:=Ctrl, index:=Index, opts:=Opts} = State,
-    case etcdc:get(Key, [wait, {waitIndex, Index}|Opts]--[continous]) of
+    #{key := Key, ctrl := Ctrl, index := Index, opts := Opts} = State,
+    case etcdc:get(Key, [wait, {waitIndex, Index} | Opts] -- [continous]) of
         {error, Error} ->
             Ctrl ! {watch_error, self(), Error},
             {stop, normal, State};
@@ -42,7 +43,7 @@ handle_cast(check_watch, State) ->
             case proplists:get_bool(continous, Opts) of
                 true ->
                     gen_server:cast(self(), check_watch),
-                    {noreply, State#{index:=NewIndex+1}};
+                    {noreply, State#{index := NewIndex + 1}};
                 false ->
                     {stop, normal, State}
             end
@@ -50,7 +51,7 @@ handle_cast(check_watch, State) ->
 handle_cast(_, State) ->
     {noreply, State}.
 
-handle_info({'DOWN', MonRef, _, _, _}, #{mon_ref:=MonRef} = State) ->
+handle_info({'DOWN', MonRef, _, _, _}, #{mon_ref := MonRef} = State) ->
     {stop, normal, State};
 handle_info(_, State) ->
     {noreply, State}.
@@ -60,5 +61,3 @@ terminate(_, _) ->
 
 code_change(_, State, _) ->
     State.
-
-%% Internal -------------------------------------------------------------------

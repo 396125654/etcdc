@@ -13,15 +13,14 @@
 -type set_opt() :: dir
                  | prevExist
                  | sequence
-                 | {prevValue, term()}
-                 | {prevIndex, term()}
                  | {ttl, term()}
-                 | {ttl_renew, term()}.
+                 | {prevIndex, term()}
+                 | {prevValue, term()}.
 
--type del_opt() :: dir
+-type del_opt() :: recursive
                  | prevExist
-                 | {prevValue, term()}
-                 | {prevIndex, term()}.
+                 | {prevIndex, term()}
+                 | {prevValue, term()}.
 
 %% ----------------------------------------------------------------------------
 

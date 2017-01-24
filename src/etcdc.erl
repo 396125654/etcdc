@@ -20,7 +20,7 @@
                  | {prevIndex, term()}
                  | {prevValue, term()}.
 
--type del_opt() :: dir
+-type del_opt() :: recursive
                  | prevExist
                  | {prevIndex, term()}
                  | {prevValue, term()}.
