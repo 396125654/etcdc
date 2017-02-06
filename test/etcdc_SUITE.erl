@@ -7,7 +7,7 @@
 -compile(export_all).
 
 %%--------------------------------------------------------------------
-suite() -> [{timetrap, {seconds, 30}}].
+suite() -> [{timetrap, {seconds, 50}}].
 
 %%--------------------------------------------------------------------
 groups() ->
@@ -18,6 +18,8 @@ groups() ->
        , test_etcd_watch
        , test_get_machineid_clean_history
        , test_get_machineid
+       , test_unregister_workernode
+       , test_unregister_storenode
        ]}
     ].
 %%--------------------------------------------------------------------
@@ -68,7 +70,7 @@ prepare_env() ->
     ok.
 
 wait_for_ets_table_ready(Len) ->
-    Temp = lists:append([X || {_, X} <- ets:tab2list(etcd_client)]),
+    Temp = lists:append([X || {_, X} <- ets:tab2list(etcd_client), X =/= fake]),
     case erlang:length(Temp) == Len of
         true ->
             ok;
@@ -197,6 +199,62 @@ test_get_machineid(_Config) ->
 test_get_machineid_clean_history(_Config) ->
     etcdc:del("/imstest", [recursive]),
     test_get_machineid_do().
+
+test_unregister_storenode(_Config) ->
+    {ok, _} = etcd_client:start_link(),
+
+    ok = etcd_client:register_storenode(all, 5, 300, 'test1@a'),
+    ok = etcd_client:register_storenode(all, 5, 300),
+    ok = etcd_client:register_storenode(muc, 5, 300, 'test4'),
+
+    ok = etcd_client:watch_storenode_list(100),
+    ok = wait_for_ets_table_ready(3),
+
+    timer:sleep(2000),
+
+    ok = etcd_client:unregister_storenode(all, 'test1@a'),
+    ok = etcd_client:unregister_storenode(all),
+    {error, empty} = etcd_client:get_storenode(all),
+    ok = etcd_client:unregister_storenode(muc, 'test4'),
+    {error, empty} = etcd_client:get_storenode(muc),
+
+    timer:sleep(2000),
+
+    {error, empty} = etcd_client:get_storenode(all),
+    {error, empty} = etcd_client:get_storenode(muc),
+
+    ok = etcd_client:unregister_storenode(all, 'test1@a'),
+    {error, empty} = etcd_client:get_storenode(all),
+    ok = etcd_client:unregister_storenode(muc, 'test4'),
+    {error, empty} = etcd_client:get_storenode(muc),
+
+    ok.
+
+test_unregister_workernode(_Config) ->
+    {ok, _} = etcd_client:start_link(),
+
+    ok = etcd_client:register_workernode(all, 5, 300, 'test1@a'),
+    ok = etcd_client:register_workernode(muc, 5, 300, 'test4'),
+
+    ok = etcd_client:watch_workernode_list(100),
+    ok = wait_for_ets_table_ready(2),
+
+    timer:sleep(2000),
+
+    ok = etcd_client:unregister_workernode(all, 'test1@a'),
+    ok = etcd_client:unregister_workernode(all),
+    {error, empty} = etcd_client:get_workernode(all),
+    ok = etcd_client:unregister_workernode(muc, 'test4'),
+    {error, empty} = etcd_client:get_workernode(muc),
+
+    timer:sleep(2000),
+
+    ok = etcd_client:unregister_workernode(all, 'test1@a'),
+    {error, empty} = etcd_client:get_workernode(all),
+    ok = etcd_client:unregister_workernode(muc, 'test4'),
+    {error, empty} = etcd_client:get_workernode(muc),
+
+    ok.
 
 test_get_machineid_do() ->
     T = ets:new(t, [public]),

@@ -24,6 +24,10 @@
         , register_storenode/3
         , register_storenode/4
         , get_storenode/1
+        , unregister_workernode/1
+        , unregister_workernode/2
+        , unregister_storenode/1
+        , unregister_storenode/2
         ]).
 
 %% gen_server callbacks
@@ -91,6 +95,18 @@ register_storenode(GroupType, TTL, TimeInterval, Node) ->
 get_storenode(GroupType) ->
     get_node(store, GroupType).
 
+unregister_workernode(GroupType) ->
+    unregister_workernode(GroupType, node()).
+
+unregister_workernode(GroupType, Node) ->
+    unregister_node(worker, GroupType, Node).
+
+unregister_storenode(GroupType) ->
+    unregister_storenode(GroupType, node()).
+
+unregister_storenode(GroupType, Node) ->
+    unregister_node(store, GroupType, Node).
+
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
@@ -100,6 +116,13 @@ init([]) ->
     {ok, #state{}, ?HIBERNATE_TIMEOUT}.
 
 %%--------------------------------------------------------------------
+handle_call({unregister_node, NodeType, GroupType, Node}, _From, State) ->
+    EtcdKey = generate_node_key(NodeType, GroupType, Node),
+    delete_node(EtcdKey),
+    rewrite_ets_del_node(EtcdKey, Node),
+    write_unregister_tag(Node),
+    {reply, ok, State, ?HIBERNATE_TIMEOUT};
+
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State};
 
@@ -113,11 +136,16 @@ handle_cast(_Msg, State) ->
 %%--------------------------------------------------------------------
 handle_info({register_node, NodeType, GroupType, TTL, TimeInterval, Node},
             State) ->
-    EtcdKey = generate_node_key(NodeType, GroupType, Node),
-    write_node(EtcdKey, TTL),
-    erlang:send_after(TimeInterval, self(),
-                      {register_node, NodeType, GroupType, TTL,
-                       TimeInterval, Node}),
+    case ets:lookup(?SERVER, {'__UNREGISTER_TAG__', Node}) of
+        [] ->
+            EtcdKey = generate_node_key(NodeType, GroupType, Node),
+            write_node(EtcdKey, TTL),
+            erlang:send_after(TimeInterval, self(),
+                              {register_node, NodeType, GroupType, TTL,
+                               TimeInterval, Node});
+        _ ->
+            ok
+    end,
     {noreply, State, ?HIBERNATE_TIMEOUT};
 
 handle_info({watch_node_list, EtcdKey, TimeInterval}, State) ->
@@ -219,10 +247,35 @@ get_node(NodeType, GroupType) ->
             {ok, lists:nth(random:uniform(length(List)), List)}
     end.
 
+unregister_node(NodeType, GroupType, Node) ->
+    gen_server:call(?SERVER, {unregister_node, NodeType, GroupType, Node}).
+
 generate_node_key(NodeType, GroupType, Node) ->
     KeyPrefix = get_node_prefix(NodeType),
     filename:join([KeyPrefix, erlang:atom_to_list(GroupType),
                    http_uri:encode(erlang:atom_to_list(Node))]).
+
+delete_node(EtcdKey) ->
+    etcdc:del(EtcdKey).
+
+rewrite_ets_del_node(EtcdKey0, Node) ->
+    EtcdKey = filename:dirname(EtcdKey0),
+    case catch ets:lookup(?SERVER, EtcdKey) of
+        [{EtcdKey, NodeList}] ->
+            case lists:delete(Node, NodeList) of
+                [] ->
+                    ets:delete(?SERVER, EtcdKey);
+                NewNodeList ->
+                    ets:insert(?SERVER, {EtcdKey, NewNodeList})
+            end,
+            ok;
+        _ ->
+            ok
+    end.
+
+write_unregister_tag(Node) ->
+    ets:insert(?SERVER, {{'__UNREGISTER_TAG__', Node}, fake}),
+    ok.
 
 write_node(EtcdKey, TTL) ->
     etcdc:set(EtcdKey, "up", [{ttl, TTL}]).
