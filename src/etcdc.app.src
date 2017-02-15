@@ -7,12 +7,7 @@
                  ]},
   {modules, []},
   {mod, {etcdc_app, no_arg}},
-  {env, [{etcd_server_list,
-          [{"127.0.0.1", 49179},
-           {"127.0.0.1", 49279},
-           {"127.0.0.1", 49379},
-           {"127.0.0.1", 49479}]
-         },
+  {env, [{etcd_server_list, "127.0.0.1:59179,127.0.0.1:59279,127.0.0.1:59379,127.0.0.1:59479"},
          {client_retry_times, 3},
          {global_machine_id_key, "/imstest/ejabberd/globalmachineid"},
          {global_machine_id_start, 1},

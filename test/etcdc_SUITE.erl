@@ -57,8 +57,7 @@ end_per_testcase(_TestCase, _Config) ->
 
 prepare_env() ->
     application:set_env(etcdc, etcd_server_list,
-                        [{"127.0.0.1", 49179}, {"127.0.0.1", 49279},
-                         {"127.0.0.1", 49379}, {"127.0.0.1", 49479}]),
+                        "127.0.0.1:59179,127.0.0.1:59279,127.0.0.1:59379,127.0.0.1:59479"),
     application:set_env(etcdc, client_retry_times, 3),
     application:set_env(etcdc, ejabberd_workernode_prefix, "/imstest/ejabberd/workernode"),
     application:set_env(etcdc, ejabberd_connnode_prefix, "/imstest/ejabberd/connnode"),

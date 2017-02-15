@@ -53,7 +53,12 @@ retry_call(_) ->
     false.
 
 get_server_info(Exclude) ->
-    {ok, ServerList0} = application:get_env(etcdc, etcd_server_list),
+    {ok, ServerString} = application:get_env(etcdc, etcd_server_list),
+    ServerList0 =
+        [begin
+            [Host, Port] = string:tokens(X, ":"),
+            {Host, erlang:list_to_integer(Port)}
+         end || X <- string:tokens(ServerString, ",")],
     ServerList =
         case erlang:length(ServerList0) =< erlang:length(Exclude) of
             true ->
