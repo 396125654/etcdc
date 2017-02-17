@@ -24,10 +24,16 @@ new(Key, Opts) ->
 %% gen_server callbacks -------------------------------------------------------
 
 init([Key, Ctrl, Opts]) ->
-    MonRef = erlang:monitor(process, Ctrl),
-    gen_server:cast(self(), check_watch),
-    {ok, #{ctrl => Ctrl, key => Key, index => 0,
-           mon_ref => MonRef, opts => Opts}}.
+    case erlang:is_process_alive(Ctrl) of
+        true ->
+            MonRef = erlang:monitor(process, Ctrl),
+            gen_server:cast(self(), check_watch),
+            erlang:send(Ctrl, {watch_started, self(), Key}),
+            {ok, #{ctrl => Ctrl, key => Key, index => 0,
+                   mon_ref => MonRef, opts => Opts}};
+        false ->
+            {stop, normal}
+    end.
 
 handle_call(_, _, State) ->
     {noreply, State}.
@@ -36,7 +42,7 @@ handle_cast(check_watch, State) ->
     #{key := Key, ctrl := Ctrl, index := Index, opts := Opts} = State,
     case etcdc:get(Key, [wait, {waitIndex, Index} | Opts] -- [continous]) of
         {error, Error} ->
-            Ctrl ! {watch_error, self(), Error},
+            Ctrl ! {watch_error, self(), Key, Error},
             {stop, normal, State};
         #{<<"node">> := #{<<"modifiedIndex">> := NewIndex}} = Response ->
             Ctrl ! {watch, self(), Response},

@@ -28,6 +28,9 @@
         , unregister_workernode/2
         , unregister_storenode/1
         , unregister_storenode/2
+
+        , config_watch_key/1
+        , config_unwatch_key/1
         ]).
 
 %% gen_server callbacks
@@ -107,6 +110,12 @@ unregister_storenode(GroupType) ->
 unregister_storenode(GroupType, Node) ->
     unregister_node(store, GroupType, Node).
 
+config_watch_key(EtcdKeyPrefix) ->
+    gen_server:call(?SERVER, {config_watch_key, EtcdKeyPrefix}).
+
+config_unwatch_key(EtcdKeyPrefix) ->
+    gen_server:call(?SERVER, {config_unwatch_key, EtcdKeyPrefix}).
+
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
@@ -116,6 +125,27 @@ init([]) ->
     {ok, #state{}, ?HIBERNATE_TIMEOUT}.
 
 %%--------------------------------------------------------------------
+
+handle_call({config_watch_key, EtcdKeyPrefix}, _From, State) ->
+    case ets:lookup(?SERVER, {config_watch_key, EtcdKeyPrefix}) of
+        [] ->
+            etcdc:watch(EtcdKeyPrefix, [continous, recursive]),
+            ok;
+        [{_, _}] ->
+            ok
+    end,
+    {reply, ok, State, ?HIBERNATE_TIMEOUT};
+
+handle_call({config_unwatch_key, EtcdKeyPrefix}, _From, State) ->
+    case ets:lookup(?SERVER, {config_watch_key, EtcdKeyPrefix}) of
+        [{_, Pid}] ->
+            ets:delete(?SERVER, {config_watch_key, EtcdKeyPrefix}),
+            ok = etcdc:cancel_watch(Pid);
+        [] ->
+            ok
+    end,
+    {reply, ok, State, ?HIBERNATE_TIMEOUT};
+
 handle_call({unregister_node, NodeType, GroupType, Node}, _From, State) ->
     EtcdKey = generate_node_key(NodeType, GroupType, Node),
     delete_node(EtcdKey),
@@ -159,7 +189,27 @@ handle_info({watch_node_list, EtcdKey, TimeInterval}, State) ->
                       {watch_node_list, EtcdKey, TimeInterval}),
     {noreply, State, ?HIBERNATE_TIMEOUT};
 
+handle_info({watch, _, EtcdConfigAltera}, State) ->
+    etcd_config:set_env_and_backup_file_basedon_etcd(
+        {watch, EtcdConfigAltera}),
+    {noreply, State, ?HIBERNATE_TIMEOUT};
+
+handle_info({watch_started, Pid, EtcdKeyPrefix}, State) ->
+    ets:insert(?SERVER, {{config_watch_key, EtcdKeyPrefix}, Pid}),
+    {noreply, State, ?HIBERNATE_TIMEOUT};
+
+handle_info({watch_error, _, Key, Error}, State) ->
+    io:format(" !! watch etcd error, key ~p, error ~p~n", [Key, Error]),
+    ets:delete(?SERVER, {config_watch_key, Key}),
+    erlang:send_after(3000, self(), {retry_watch_etcd, Key}),
+    {noreply, State, ?HIBERNATE_TIMEOUT};
+
+handle_info({retry_watch_etcd, Key}, State) ->
+    etcdc:watch(Key, [continous, recursive]),
+    {noreply, State, ?HIBERNATE_TIMEOUT};
+
 handle_info(_Info, State) ->
+    io:format("----->>>>>>>>>>>> ~p~n", [_Info]),
     {noreply, State, ?HIBERNATE_TIMEOUT}.
 
 %%--------------------------------------------------------------------

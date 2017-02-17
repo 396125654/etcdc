@@ -91,7 +91,7 @@ watch(Key, Opts) ->
 
 -spec cancel_watch(Pid :: pid()) -> ok.
 cancel_watch(Pid) ->
-    supervisor:terminate_child(etcdc_stream_sup, Pid).
+    supervisor:terminate_child(etcdc_watch_sup, Pid).
 
 %% Stats ----------------------------------------------------------------------
 
