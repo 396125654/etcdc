@@ -40,7 +40,9 @@ set_env_and_backup_file_basedon_etcd(EtcdConfigInfo)
          end || X <- EtcdConfig],
     backup_file_basedon_etcd(AppList),
     ok;
-set_env_and_backup_file_basedon_etcd({watch, EtcdConfigAltera}) ->
+set_env_and_backup_file_basedon_etcd({watch,
+                                      #{<<"action">> := <<"set">>} =
+                                        EtcdConfigAltera}) ->
     #{<<"key">> := Key, <<"value">> := Content} =
         maps:get(<<"node">>, EtcdConfigAltera),
     Par = binary_to_atom(filename:basename(Key), latin1),
@@ -52,6 +54,9 @@ set_env_and_backup_file_basedon_etcd({watch, EtcdConfigAltera}) ->
             set_env(AppName, Par, Value)
     end,
     backup_file_basedon_etcd([AppName]),
+    ok;
+set_env_and_backup_file_basedon_etcd({watch, EtcdConfigAltera}) ->
+    io:format(" warning info : ~p~n", [EtcdConfigAltera]),
     ok.
 
 config_recover_from_backup_file() ->
