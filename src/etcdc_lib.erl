@@ -66,9 +66,7 @@ get_server_info(Exclude) ->
             false ->
                 ServerList0 -- Exclude
         end,
-    {A1, A2, A3} = os:timestamp(),
-    random:seed(A1, A2, A3),
-    lists:nth(random:uniform(length(ServerList)), ServerList).
+    lists:nth(rand:uniform(length(ServerList)), ServerList).
 
 get_timeout(Opts) ->
     case proplists:get_bool(wait, Opts) of

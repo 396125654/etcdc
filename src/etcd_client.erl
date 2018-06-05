@@ -292,9 +292,7 @@ get_node(NodeType, GroupType) ->
         [] ->
             {error, empty};
         [{_, List}] ->
-            {A1, A2, A3} = os:timestamp(),
-            random:seed(A1, A2, A3),
-            {ok, lists:nth(random:uniform(length(List)), List)}
+            {ok, lists:nth(rand:uniform(length(List)), List)}
     end.
 
 unregister_node(NodeType, GroupType, Node) ->
