@@ -1,7 +1,7 @@
 [
  {deps, [
-    {jsx, ".*", {git, "git://github.com/talentdeficit/jsx.git", "c61be973b95ba4cc5fd646d1f80b65b8eeba8376"}},
-    {lhttpc, ".*", {git, "git://github.com/theorix/lhttpc.git", "be9472ff65a2056e84449277a30acc5e67fc2ab8"}}
+    {jsx, ".*", {git, "git://github.com/talentdeficit/jsx.git", "da0501714bc613112c03b01ebe08f904cad9e6f6"}},
+    {lhttpc, ".*", {git, "git://github.com/theorix/lhttpc.git", "1b6f44164e7df9868a02cdf005bbdca076537e9b"}}
  ]},
  {ct_dir, "test"},
  {ct_log_dir, "test/logs"},
